@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "collections": {
+    "users": {
+      "description": "User profiles and summary states",
+      "fields": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string", "optional": true },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "currentWeekId": { "type": "string" },
+        "currentWeekMinutes": { "type": "number" },
+        "currentWeekStage": { "type": "number" },
+        "updatedAt": { "type": "timestamp" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "subcollections": {
+        "weeks": {
+          "description": "Weekly screen time progress records",
+          "fields": {
+            "weekId": { "type": "string" },
+            "weekLabel": { "type": "string" },
+            "completedStages": { "type": "number" },
+            "totalMinutes": { "type": "number" },
+            "stageTimestamps": { "type": "array" },
+            "notes": { "type": "string", "optional": true },
+            "updatedAt": { "type": "timestamp" }
+          }
+        }
+      }
+    },
+    "app_settings": {
+      "description": "Global application configuration including academic calendar and week schedules",
+      "fields": {
+        "schoolStartDate": { "type": "string" },
+        "weeks": { "type": "array" },
+        "updatedAt": { "type": "timestamp" },
+        "updatedBy": { "type": "string", "optional": true }
+      }
+    }
+  }
+}

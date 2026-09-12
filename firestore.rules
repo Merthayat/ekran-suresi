@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'olcaytoh@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+
+      match /weeks/{weekId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated();
+      }
+
+      match /logs/{logId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated();
+      }
+    }
+
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /app_settings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+  }
+}

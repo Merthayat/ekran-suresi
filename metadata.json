@@ -1,0 +1,6 @@
+{
+  "name": "Haftalık Ekran Süresi Takibi",
+  "description": "30 dakikalık 12 kademeli haftalık ekran süresi takip ve admin izleme uygulaması",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
