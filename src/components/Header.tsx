@@ -20,6 +20,7 @@ interface HeaderProps {
   memberCount: number;
   currentWeekLabel: string;
   onOpenClassSetup?: () => void;
+  onSignOut?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   isAdmin,
   memberCount,
   onOpenClassSetup,
+  onSignOut,
 }) => {
   const [copied, setCopied] = useState(false);
   const isTeacher = isAdmin || currentUser?.role === 'teacher' || currentUser?.userType === 'teacher';
@@ -137,7 +139,13 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               id="btn-signout"
-              onClick={() => signOutUser()}
+              onClick={() => {
+                if (onSignOut) {
+                  onSignOut();
+                } else {
+                  signOutUser();
+                }
+              }}
               title="Çıkış Yap"
               className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer active:scale-95"
             >

@@ -3,12 +3,15 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithCredential,
   signOut,
   onAuthStateChanged,
   signInAnonymously,
   updateProfile,
   User,
 } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import {
   getFirestore,
   doc,
@@ -44,14 +47,38 @@ googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
 
-// Admin email configured by default
+// Admin emails configured by default
 export const DEFAULT_ADMIN_EMAIL = 'olcaytoh@gmail.com';
+export const ADMIN_EMAILS = ['olcaytoh@gmail.com', 'merthayat8004@gmail.com'];
+
+export function isAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return ADMIN_EMAILS.some((admin) => admin.toLowerCase() === email.toLowerCase());
+}
 
 /**
  * Sign in with Google Account
+ * Uses native Google Sign-in on Android via Capacitor, and standard popup on Web
  */
 export async function signInWithGoogle(): Promise<User | null> {
   try {
+    if (Capacitor.isNativePlatform()) {
+      // Use Google's native service on Android via Capacitor FirebaseAuthentication plugin
+      const res = await FirebaseAuthentication.signInWithGoogle();
+      const idToken = res.credential?.idToken;
+      if (idToken) {
+        const credential = GoogleAuthProvider.credential(idToken);
+        const userCred = await signInWithCredential(auth, credential);
+        await syncUserProfile(userCred.user);
+        return userCred.user;
+      }
+      if (auth.currentUser) {
+        await syncUserProfile(auth.currentUser);
+        return auth.currentUser;
+      }
+    }
+
+    // Web browser fallback
     const result = await signInWithPopup(auth, googleProvider);
     await syncUserProfile(result.user);
     return result.user;
@@ -59,7 +86,10 @@ export async function signInWithGoogle(): Promise<User | null> {
     if (
       error?.code === 'auth/popup-closed-by-user' ||
       error?.code === 'auth/cancelled-popup-request' ||
-      error?.message?.includes('popup-closed-by-user')
+      error?.message?.includes('popup-closed-by-user') ||
+      error?.message?.includes('12501') ||
+      error?.message?.includes('user cancelled') ||
+      error?.message?.includes('canceled')
     ) {
       console.info('Google Sign-in was dismissed or closed by user.');
       return null;
@@ -88,6 +118,13 @@ export async function signInAsGuest(customName?: string): Promise<User> {
  * Sign out
  */
 export async function signOutUser(): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await FirebaseAuthentication.signOut();
+    } catch {
+      // Ignore native sign out error
+    }
+  }
   await signOut(auth);
 }
 
@@ -103,7 +140,7 @@ export async function syncUserProfile(
   const snap = await getDoc(userRef);
   const { weekId } = getCurrentWeekInfo();
 
-  const isDefaultAdmin = user.email?.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase();
+  const isDefaultAdmin = isAdminEmail(user.email);
 
   let pendingRole: 'teacher' | 'parent' | null = roleOverride || null;
   if (!pendingRole && typeof window !== 'undefined') {

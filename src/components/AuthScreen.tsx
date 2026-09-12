@@ -8,17 +8,24 @@ import {
   Clock,
   School,
   Check,
+  Copy,
+  AlertTriangle,
+  ArrowRight,
+  ExternalLink,
 } from 'lucide-react';
 
 interface AuthScreenProps {
   onSuccess?: () => void;
+  onDemoLogin?: (role: 'teacher' | 'parent') => void;
 }
 
-export const AuthScreen: React.FC<AuthScreenProps> = () => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({ onDemoLogin }) => {
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('Giriş yapılıyor...');
   const [error, setError] = useState<string | null>(null);
   const [promptWarning, setPromptWarning] = useState(false);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [domainCopied, setDomainCopied] = useState(false);
 
   // Remember previously chosen role from localStorage if any
   const [selectedRole, setSelectedRole] = useState<'teacher' | 'parent' | null>(() => {
@@ -68,7 +75,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = () => {
         return;
       }
       console.error('Google Sign-in failed:', err);
-      if (err.code === 'auth/popup-blocked') {
+      if (
+        err?.code === 'auth/unauthorized-domain' ||
+        err?.message?.includes('unauthorized-domain')
+      ) {
+        setUnauthorizedDomain(typeof window !== 'undefined' ? window.location.hostname : 'run.app');
+        setError(null);
+      } else if (
+        err?.code === 'auth/admin-restricted-operation' ||
+        err?.message?.includes('admin-restricted-operation')
+      ) {
+        setError(
+          'Firebase Authentication ayarlarında "Google" sağlayıcısı henüz aktif edilmemiş veya yeni kullanıcı kaydı (Sign-up) sınırlandırılmış. Firebase Console > Authentication > Sign-in method sekmesinden Google sağlayıcısını etkinleştirin.'
+        );
+      } else if (err.code === 'auth/popup-blocked') {
         setError('Tarayıcınız Google giriş penceresini engelledi. Lütfen açılır pencerelere izin verin veya Test Girişi butonuna dokunun.');
       } else {
         setError(err.message || 'Google ile giriş yapılırken bir sorun oluştu.');
@@ -79,9 +99,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = () => {
   };
 
   const handleGuestTestLogin = async () => {
+    const role = selectedRole || 'teacher';
     try {
       setLoading(true);
-      const role = selectedRole || 'teacher';
       setLoadingText(`${role === 'teacher' ? 'Öğretmen' : 'Veli'} test girişi yapılıyor...`);
       setError(null);
       localStorage.setItem('pendingUserRole', role);
@@ -91,10 +111,32 @@ export const AuthScreen: React.FC<AuthScreenProps> = () => {
         await signInAsGuest('Fatma Yılmaz (Öğrenci: Ali Yılmaz)');
       }
     } catch (err: any) {
-      setError(err.message || 'Giriş yapılamadı.');
+      console.warn('Firebase guest test login failed, falling back to local demo login:', err);
+      if (onDemoLogin) {
+        // Smoothly fall back to demo mode so user is never blocked
+        onDemoLogin(role);
+        return;
+      }
+      if (
+        err?.code === 'auth/admin-restricted-operation' ||
+        err?.message?.includes('admin-restricted-operation')
+      ) {
+        setError(
+          'Firebase Console üzerinde "Anonymous (Anonim)" veya "Google" sağlayıcısı kapalı olduğu için giriş yapılamadı. Lütfen Firebase Console > Authentication > Sign-in method bölümünden giriş yöntemini açın.'
+        );
+      } else {
+        setError(err.message || 'Giriş yapılamadı.');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCopyDomain = () => {
+    if (!unauthorizedDomain) return;
+    navigator.clipboard.writeText(unauthorizedDomain);
+    setDomainCopied(true);
+    setTimeout(() => setDomainCopied(false), 2500);
   };
 
   return (
@@ -308,6 +350,84 @@ export const AuthScreen: React.FC<AuthScreenProps> = () => {
                 className="text-[11px] font-black text-indigo-700 hover:underline cursor-pointer"
               >
                 Test Olarak Doğrudan Giriş Yap ({selectedRole === 'parent' ? 'Veli' : 'Öğretmen'}) →
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Unauthorized Domain Guide Card */}
+        {unauthorizedDomain && (
+          <div className="absolute top-2 left-2 right-2 bottom-2 z-50 bg-white/95 backdrop-blur-md border-2 border-amber-400 p-4 rounded-[1.8rem] shadow-2xl flex flex-col justify-between text-xs animate-in fade-in zoom-in-95">
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between border-b border-amber-100 pb-2">
+                <div className="flex items-center gap-1.5 font-black text-amber-900 text-xs sm:text-sm">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  Firebase Yetkili Etki Alanı Gerekli
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUnauthorizedDomain(null)}
+                  className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-600 leading-snug text-left">
+                Firebase güvenliği gereği, web tarayıcısından veya önizlemeden Google ile giriş yapabilmek için bu adresin Firebase Console'a eklenmesi gerekir:
+              </p>
+
+              {/* Hostname with copy button */}
+              <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-300/80 rounded-xl p-2">
+                <code className="text-[10.5px] font-mono text-indigo-900 flex-1 truncate select-all font-semibold">
+                  {unauthorizedDomain}
+                </code>
+                <button
+                  type="button"
+                  onClick={handleCopyDomain}
+                  className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex-shrink-0"
+                >
+                  {domainCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-300" />
+                      Kopyalandı
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      Kopyala
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* 3 Step Instructions */}
+              <div className="text-[10.5px] text-slate-700 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/70 flex flex-col gap-1 text-left">
+                <span className="font-black text-amber-950">Firebase'e nasıl eklenir? (30 sn)</span>
+                <span className="leading-tight">1. <b>Firebase Console</b> &gt; Authentication &gt; <b>Settings (Ayarlar)</b> sekmesini açın.</span>
+                <span className="leading-tight">2. <b>Authorized domains (Yetkili etki alanları)</b> bölümünde <b>Add domain</b> butonuna tıklayın.</span>
+                <span className="leading-tight">3. Yukarıdan kopyaladığınız adresi yapıştırıp kaydedin.</span>
+                <span className="text-[9.5px] text-slate-500 font-medium mt-0.5">
+                  *(Not: Android APK uygulamasında bu kısıtlama yoktur, telefonunuzda Google girişi doğrudan çalışır.)*
+                </span>
+              </div>
+            </div>
+
+            {/* Direct Demo Login Button */}
+            <div className="pt-2 border-t border-slate-200 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setUnauthorizedDomain(null);
+                  if (onDemoLogin) {
+                    onDemoLogin(selectedRole || 'teacher');
+                  } else {
+                    handleGuestTestLogin();
+                  }
+                }}
+                className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white font-black text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Önizlemede Hemen Giriş Yap ({selectedRole === 'parent' ? 'Veli' : 'Öğretmen'})</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
